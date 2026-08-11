@@ -56,17 +56,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
     )
 
-async def handle_message(
-   user = update.effective_user
-message = update.message
+async def handle_message(update, context):
+    user = update.effective_user
+    message = update.message
 
-data = {
-    "telegram_user_id": user.id if user else None,
-    "telegram_username": user.username if user else None,
-    "telegram_name": user.full_name if user else None,
-    "message": message.text or message.caption or "",
-}
-)
+    data = {
+        "telegram_user_id": user.id if user else None,
+        "telegram_username": user.username if user else None,
+        "telegram_name": user.full_name if user else None,
+        "message": message.text or message.caption or "",
+    }
+
+    supabase.table("news_tips").insert(data).execute()
 
 response = (
     supabase
