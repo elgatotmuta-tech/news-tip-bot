@@ -126,6 +126,18 @@ async def handle_message(
 telegram_app.add_handler(
     CommandHandler("start", start)
 )
+async def group_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+
+    await update.message.reply_text(
+        f"ဒီ Group ရဲ့ ID က:\n`{chat.id}`",
+        parse_mode="Markdown"
+    )
+
+
+telegram_app.add_handler(
+    CommandHandler("id", group_id)
+)
 
 telegram_app.add_handler(
     MessageHandler(
