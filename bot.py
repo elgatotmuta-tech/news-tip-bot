@@ -4,13 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from supabase import create_client
 
 
@@ -22,33 +16,24 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 EDITOR_GROUP_ID = os.getenv("EDITOR_GROUP_ID")
-
-RENDER_EXTERNAL_URL = os.getenv(
-    "RENDER_EXTERNAL_URL"
-)
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
 # ============================================================
 # CHECK ENVIRONMENT VARIABLES
 # ============================================================
 
-missing_variables = []
-
 if not BOT_TOKEN:
-    missing_variables.append("BOT_TOKEN")
+    raise RuntimeError("BOT_TOKEN is missing")
 
 if not SUPABASE_URL:
-    missing_variables.append("SUPABASE_URL")
+    raise RuntimeError("SUPABASE_URL is missing")
 
 if not SUPABASE_KEY:
-    missing_variables.append("SUPABASE_KEY")
+    raise RuntimeError("SUPABASE_KEY is missing")
 
-
-if missing_variables:
-    raise RuntimeError(
-        "Missing Render Environment Variables: "
-        + ", ".join(missing_variables)
-    )
+if not RENDER_EXTERNAL_URL:
+    raise RuntimeError("RENDER_EXTERNAL_URL is missing")
 
 
 # ============================================================
@@ -62,23 +47,14 @@ supabase = create_client(
 
 
 # ============================================================
-# RENDER URL
+# WEBHOOK
 # ============================================================
-
-if not RENDER_EXTERNAL_URL:
-    raise RuntimeError(
-        "RENDER_EXTERNAL_URL is missing. "
-        "Add your Render public URL in Environment Variables."
-    )
-
 
 RENDER_EXTERNAL_URL = RENDER_EXTERNAL_URL.rstrip("/")
 
-WEBHOOK_PATH = "/telegram/webhook"
-
 WEBHOOK_URL = (
     RENDER_EXTERNAL_URL
-    + WEBHOOK_PATH
+    + "/telegram/webhook"
 )
 
 
@@ -87,15 +63,14 @@ WEBHOOK_URL = (
 # ============================================================
 
 telegram_app = (
-    Application
-    .builder()
+    Application.builder()
     .token(BOT_TOKEN)
     .build()
 )
 
 
 # ============================================================
-# /START
+# START COMMAND
 # ============================================================
 
 async def start(
@@ -119,12 +94,12 @@ async def start(
         reply_markup=ReplyKeyboardMarkup(
             keyboard,
             resize_keyboard=True
-        ),
+        )
     )
 
 
 # ============================================================
-# /ID
+# GROUP ID COMMAND
 # ============================================================
 
 async def group_id(
@@ -135,7 +110,8 @@ async def group_id(
     chat = update.effective_chat
 
     await update.message.reply_text(
-        f"ဒီ Chat / Group ရဲ့ ID က:\n{chat.id}"
+        "ဒီ Chat / Group ရဲ့ ID က:\n"
+        + str(chat.id)
     )
 
 
@@ -143,7 +119,7 @@ async def group_id(
 # SAVE NEWS TO SUPABASE
 # ============================================================
 
-async def save_news_to_supabase(
+async def save_news(
     update: Update,
     text: str
 ):
@@ -151,25 +127,10 @@ async def save_news_to_supabase(
     user = update.effective_user
 
     data = {
-        "telegram_user_id": (
-            user.id
-            if user
-            else None
-        ),
-
-        "telegram_username": (
-            user.username
-            if user
-            else None
-        ),
-
-        "telegram_name": (
-            user.full_name
-            if user
-            else None
-        ),
-
-        "message": text,
+        "telegram_user_id": user.id if user else None,
+        "telegram_username": user.username if user else None,
+        "telegram_name": user.full_name if user else None,
+        "message": text
     }
 
     try:
@@ -181,19 +142,15 @@ async def save_news_to_supabase(
             .execute()
         )
 
-        print(
-            "SUPABASE NEWS SAVED:",
-            result.data
-        )
+        print("NEWS SAVED TO SUPABASE")
+        print(result.data)
 
         return True
 
     except Exception as error:
 
-        print(
-            "SUPABASE ERROR:",
-            repr(error)
-        )
+        print("SUPABASE ERROR:")
+        print(repr(error))
 
         return False
 
@@ -202,16 +159,14 @@ async def save_news_to_supabase(
 # SEND NEWS TO EDITOR GROUP
 # ============================================================
 
-async def send_news_to_editor(
+async def send_to_editor(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     text: str
 ):
 
     if not EDITOR_GROUP_ID:
-        print(
-            "EDITOR_GROUP_ID is not configured."
-        )
+        print("EDITOR_GROUP_ID is missing")
         return
 
     user = update.effective_user
@@ -223,7 +178,7 @@ async def send_news_to_editor(
     )
 
     user_id = (
-        user.id
+        str(user.id)
         if user
         else "Unknown"
     )
@@ -231,10 +186,15 @@ async def send_news_to_editor(
     report = (
         "🆕 NEW NEWS TIP\n"
         "━━━━━━━━━━━━━━━━\n\n"
-        f"👤 ပေးပို့သူ: {user_name}\n"
-        f"🆔 Telegram ID: {user_id}\n\n"
+        "👤 ပေးပို့သူ: "
+        + user_name
+        + "\n"
+        "🆔 Telegram ID: "
+        + user_id
+        + "\n\n"
         "📝 သတင်းအချက်အလက်:\n"
-        f"{text}\n\n"
+        + text
+        + "\n\n"
         "━━━━━━━━━━━━━━━━\n"
         "Status: NEW"
     )
@@ -246,16 +206,12 @@ async def send_news_to_editor(
             text=report
         )
 
-        print(
-            "NEWS SENT TO EDITOR GROUP"
-        )
+        print("NEWS SENT TO EDITOR GROUP")
 
     except Exception as error:
 
-        print(
-            "EDITOR GROUP ERROR:",
-            repr(error)
-        )
+        print("EDITOR GROUP ERROR:")
+        print(repr(error))
 
 
 # ============================================================
@@ -269,11 +225,7 @@ async def send_editor_letter(
 ):
 
     if not EDITOR_GROUP_ID:
-
-        print(
-            "EDITOR_GROUP_ID is not configured."
-        )
-
+        print("EDITOR_GROUP_ID is missing")
         return False
 
     user = update.effective_user
@@ -285,7 +237,7 @@ async def send_editor_letter(
     )
 
     user_id = (
-        user.id
+        str(user.id)
         if user
         else "Unknown"
     )
@@ -293,10 +245,15 @@ async def send_editor_letter(
     editor_message = (
         "✉️ အယ်ဒီတာထံပေးစာ\n"
         "━━━━━━━━━━━━━━━━\n\n"
-        f"👤 ပေးပို့သူ: {user_name}\n"
-        f"🆔 Telegram ID: {user_id}\n\n"
+        "👤 ပေးပို့သူ: "
+        + user_name
+        + "\n"
+        "🆔 Telegram ID: "
+        + user_id
+        + "\n\n"
         "📝 စာသား:\n"
-        f"{text}\n\n"
+        + text
+        + "\n\n"
         "━━━━━━━━━━━━━━━━"
     )
 
@@ -307,18 +264,14 @@ async def send_editor_letter(
             text=editor_message
         )
 
-        print(
-            "EDITOR LETTER SENT"
-        )
+        print("EDITOR LETTER SENT")
 
         return True
 
     except Exception as error:
 
-        print(
-            "EDITOR LETTER ERROR:",
-            repr(error)
-        )
+        print("EDITOR LETTER ERROR:")
+        print(repr(error))
 
         return False
 
@@ -344,19 +297,14 @@ async def handle_message(
     ).strip()
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # NEWS BUTTON
-    # ========================================================
+    # --------------------------------------------------------
 
     if text == "📰 သတင်းပို့ရန်":
 
-        context.user_data[
-            "submitting_news"
-        ] = True
-
-        context.user_data[
-            "submitting_editor_letter"
-        ] = False
+        context.user_data["submitting_news"] = True
+        context.user_data["submitting_editor_letter"] = False
 
         await message.reply_text(
             "📰 သတင်းပို့ရန်\n\n"
@@ -365,27 +313,20 @@ async def handle_message(
             "• ဘာဖြစ်ခဲ့သလဲ\n"
             "• ဘယ်နေရာမှာဖြစ်သလဲ\n"
             "• ဘယ်အချိန်မှာဖြစ်သလဲ\n"
-            "• သိရှိထားသမျှ အချက်အလက်များ\n\n"
-            "ဓာတ်ပုံ သို့မဟုတ် ဗီဒီယိုရှိပါကလည်း "
-            "ပေးပို့နိုင်ပါတယ်။"
+            "• သိရှိထားသမျှ အချက်အလက်များ"
         )
 
         return
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # EDITOR LETTER BUTTON
-    # ========================================================
+    # --------------------------------------------------------
 
     if text == "✉️ အယ်ဒီတာထံပေးစာ":
 
-        context.user_data[
-            "submitting_news"
-        ] = False
-
-        context.user_data[
-            "submitting_editor_letter"
-        ] = True
+        context.user_data["submitting_news"] = False
+        context.user_data["submitting_editor_letter"] = True
 
         await message.reply_text(
             "✉️ အယ်ဒီတာထံပေးစာ\n\n"
@@ -396,26 +337,20 @@ async def handle_message(
         return
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # INFORMATION BUTTON
-    # ========================================================
+    # --------------------------------------------------------
 
     if text == "ℹ️ သတင်းပေးပို့နည်း":
 
-        context.user_data[
-            "submitting_news"
-        ] = False
-
-        context.user_data[
-            "submitting_editor_letter"
-        ] = False
+        context.user_data["submitting_news"] = False
+        context.user_data["submitting_editor_letter"] = False
 
         await message.reply_text(
             "ℹ️ သတင်းပေးပို့နည်း\n\n"
             "သတင်းဖြစ်စဉ်၊ နေရာ၊ အချိန်၊ "
             "ဓာတ်ပုံနှင့် ဗီဒီယိုများကို "
             "ပေးပို့နိုင်ပါတယ်။\n\n"
-            "သတင်းအချက်အလက်များကို "
             "အယ်ဒီတာအဖွဲ့မှ စိစစ်ပြီးမှသာ "
             "အသုံးပြုပါမယ်။"
         )
@@ -423,9 +358,9 @@ async def handle_message(
         return
 
 
-    # ========================================================
-    # EDITOR LETTER PROCESS
-    # ========================================================
+    # --------------------------------------------------------
+    # EDITOR LETTER
+    # --------------------------------------------------------
 
     if context.user_data.get(
         "submitting_editor_letter"
@@ -434,12 +369,10 @@ async def handle_message(
         if not text:
 
             await message.reply_text(
-                "✉️ ပေးပို့လိုသောစာကို "
-                "ရေးပေးပါ။"
+                "ပေးပို့လိုသောစာကို ရေးပေးပါ။"
             )
 
             return
-
 
         success = await send_editor_letter(
             update,
@@ -447,13 +380,11 @@ async def handle_message(
             text
         )
 
-
         if success:
 
             await message.reply_text(
                 "✅ အယ်ဒီတာထံ ပေးစာကို "
-                "ပေးပို့ပြီးပါပြီ။\n\n"
-                "ကျေးဇူးတင်ပါတယ်။"
+                "ပေးပို့ပြီးပါပြီ။"
             )
 
         else:
@@ -463,7 +394,6 @@ async def handle_message(
                 "အမှားတစ်ခု ဖြစ်သွားပါတယ်။"
             )
 
-
         context.user_data[
             "submitting_editor_letter"
         ] = False
@@ -471,9 +401,9 @@ async def handle_message(
         return
 
 
-    # ========================================================
-    # NEWS PROCESS
-    # ========================================================
+    # --------------------------------------------------------
+    # NEWS SUBMISSION
+    # --------------------------------------------------------
 
     if context.user_data.get(
         "submitting_news"
@@ -482,46 +412,37 @@ async def handle_message(
         if not text:
 
             await message.reply_text(
-                "📝 သတင်းအချက်အလက်ကို "
-                "ရေးပေးပါ။"
+                "သတင်းအချက်အလက်ကို ရေးပေးပါ။"
             )
 
             return
 
-
-        # Save to Supabase
-        saved = await save_news_to_supabase(
+        saved = await save_news(
             update,
             text
         )
 
-
         if not saved:
 
             await message.reply_text(
-                "❌ သတင်းကို သိမ်းဆည်းရာမှာ "
-                "အမှားတစ်ခု ဖြစ်သွားပါတယ်။\n\n"
+                "❌ သတင်းကို Supabase ထဲ "
+                "သိမ်းဆည်းလို့ မရပါ။\n\n"
                 "ခဏအကြာ ပြန်လည်ပေးပို့ကြည့်ပါ။"
             )
 
             return
 
-
-        # Send to editor group
-        await send_news_to_editor(
+        await send_to_editor(
             update,
             context,
             text
         )
 
-
         await message.reply_text(
             "✅ သတင်းကို လက်ခံရရှိပါပြီ။\n\n"
             "အယ်ဒီတာအဖွဲ့က စိစစ်ပြီး "
-            "လိုအပ်ပါက ပြန်လည်ဆက်သွယ်ပါမယ်။\n\n"
-            "ကျေးဇူးတင်ပါတယ်။"
+            "လိုအပ်ပါက ပြန်လည်ဆက်သွယ်ပါမယ်။"
         )
-
 
         context.user_data[
             "submitting_news"
@@ -530,9 +451,9 @@ async def handle_message(
         return
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # DEFAULT
-    # ========================================================
+    # --------------------------------------------------------
 
     await message.reply_text(
         "သတင်းပေးပို့လိုပါက /start ကိုနှိပ်ပါ။"
@@ -540,7 +461,7 @@ async def handle_message(
 
 
 # ============================================================
-# TELEGRAM HANDLERS
+# HANDLERS
 # ============================================================
 
 telegram_app.add_handler(
@@ -574,37 +495,22 @@ async def lifespan(
     app: FastAPI
 ):
 
-    print(
-        "Starting Telegram application..."
-    )
+    print("Starting Telegram application...")
 
     await telegram_app.initialize()
 
     await telegram_app.start()
 
-
-    # Set webhook
     await telegram_app.bot.set_webhook(
         url=WEBHOOK_URL
     )
 
-
-    print(
-        "Telegram webhook set to:"
-    )
-
-    print(
-        WEBHOOK_URL
-    )
-
+    print("Telegram webhook set to:")
+    print(WEBHOOK_URL)
 
     yield
 
-
-    # Shutdown
-    print(
-        "Stopping Telegram application..."
-    )
+    print("Stopping Telegram application...")
 
     try:
 
@@ -612,11 +518,8 @@ async def lifespan(
 
     except Exception as error:
 
-        print(
-            "Webhook delete error:",
-            repr(error)
-        )
-
+        print("WEBHOOK DELETE ERROR:")
+        print(repr(error))
 
     await telegram_app.stop()
 
@@ -675,10 +578,8 @@ async def telegram_webhook(
 
     except Exception as error:
 
-        print(
-            "WEBHOOK ERROR:",
-            repr(error)
-        )
+        print("WEBHOOK ERROR:")
+        print(repr(error))
 
         return {
             "ok": False
