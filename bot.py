@@ -10,6 +10,19 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+import os
+from supabase import create_client, Client
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("SUPABASE_URL or SUPABASE_KEY is missing")
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
 
 TOKEN = os.environ["BOT_TOKEN"]
 EDITOR_GROUP_ID = os.getenv("EDITOR_GROUP_ID")
@@ -45,9 +58,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_message(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+   user = update.effective_user
+message = update.message
+
+data = {
+    "telegram_user_id": user.id if user else None,
+    "telegram_username": user.username if user else None,
+    "telegram_name": user.full_name if user else None,
+    "message": message.text or message.caption or "",
+}
+
+response = (
+    supabase
+    .table("news_tips")
+    .insert (data) = {
+    "telegram_user_id": user.id if user else None,
+    "telegram_username": user.username if user else None,
+    "telegram_name": user.full_name if user else None,
+    "message": message.text or message.caption or "",
+    "photo_file_id": photo_file_id,
+}
+    .execute()
+)
     if not update.message:
         return
 
