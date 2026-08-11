@@ -56,7 +56,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
     )
 
-
 async def handle_message(
    user = update.effective_user
 message = update.message
@@ -67,6 +66,7 @@ data = {
     "telegram_name": user.full_name if user else None,
     "message": message.text or message.caption or "",
 }
+)
 
 response = (
     supabase
