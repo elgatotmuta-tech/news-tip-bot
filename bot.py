@@ -25,7 +25,7 @@ RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
 # ============================================================
-# CHECK REQUIRED ENVIRONMENT VARIABLES
+# CHECK ENVIRONMENT VARIABLES
 # ============================================================
 
 if not BOT_TOKEN:
@@ -75,21 +75,16 @@ telegram_app = (
 
 
 # ============================================================
-# /START COMMAND
+# /START
 # ============================================================
 
 async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """
-    Handle /start command.
-    """
-
     if not update.message:
         return
 
-    # Clear previous user state
     context.user_data.clear()
 
     keyboard = [
@@ -98,41 +93,32 @@ async def start(
         ["ℹ️ သတင်းပေးပို့နည်း"],
     ]
 
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True,
-    )
-
     await update.message.reply_text(
         "မင်္ဂလာပါ။ 👋\n\n"
         "သတင်းအချက်အလက်များ၊ ဓာတ်ပုံနှင့် "
         "ဗီဒီယိုများကို ပေးပို့နိုင်ပါတယ်။\n\n"
         "အောက်ပါခလုတ်မှ ရွေးချယ်ပါ။",
-        reply_markup=reply_markup,
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard,
+            resize_keyboard=True,
+        ),
     )
 
 
 # ============================================================
-# /ID COMMAND
+# /ID
 # ============================================================
 
 async def group_id(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """
-    Return current chat/group ID.
-    """
-
     if not update.message:
         return
 
     chat = update.effective_chat
 
     if not chat:
-        await update.message.reply_text(
-            "Chat information မတွေ့ပါ။"
-        )
         return
 
     await update.message.reply_text(
@@ -149,27 +135,18 @@ async def save_news(
     update: Update,
     text: str,
 ) -> bool:
-    """
-    Save news tip to Supabase.
-    """
 
     user = update.effective_user
 
     data = {
         "telegram_user_id": (
-            user.id
-            if user
-            else None
+            user.id if user else None
         ),
         "telegram_username": (
-            user.username
-            if user
-            else None
+            user.username if user else None
         ),
         "telegram_name": (
-            user.full_name
-            if user
-            else None
+            user.full_name if user else None
         ),
         "message": text,
     }
@@ -203,9 +180,6 @@ async def send_to_editor(
     context: ContextTypes.DEFAULT_TYPE,
     text: str,
 ) -> bool:
-    """
-    Send submitted news to editor group.
-    """
 
     if not EDITOR_GROUP_ID:
         print("EDITOR_GROUP_ID is missing")
@@ -267,9 +241,6 @@ async def send_editor_letter(
     context: ContextTypes.DEFAULT_TYPE,
     text: str,
 ) -> bool:
-    """
-    Send a letter to editor group.
-    """
 
     if not EDITOR_GROUP_ID:
         print("EDITOR_GROUP_ID is missing")
@@ -329,21 +300,18 @@ async def handle_message(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """
-    Handle normal Telegram messages.
-    """
 
     if not update.message:
         return
 
     message = update.message
 
-    # Get text or caption
     text = (
         message.text
         or message.caption
         or ""
     ).strip()
+
 
     # ========================================================
     # NEWS BUTTON
@@ -352,7 +320,9 @@ async def handle_message(
     if text == "📰 သတင်းပို့ရန်":
 
         context.user_data["submitting_news"] = True
-        context.user_data["submitting_editor_letter"] = False
+        context.user_data[
+            "submitting_editor_letter"
+        ] = False
 
         await message.reply_text(
             "📰 သတင်းပို့ရန်\n\n"
@@ -368,6 +338,7 @@ async def handle_message(
 
         return
 
+
     # ========================================================
     # EDITOR LETTER BUTTON
     # ========================================================
@@ -375,7 +346,9 @@ async def handle_message(
     if text == "✉️ အယ်ဒီတာထံပေးစာ":
 
         context.user_data["submitting_news"] = False
-        context.user_data["submitting_editor_letter"] = True
+        context.user_data[
+            "submitting_editor_letter"
+        ] = True
 
         await message.reply_text(
             "✉️ အယ်ဒီတာထံပေးစာ\n\n"
@@ -385,6 +358,7 @@ async def handle_message(
 
         return
 
+
     # ========================================================
     # INFORMATION BUTTON
     # ========================================================
@@ -392,7 +366,9 @@ async def handle_message(
     if text == "ℹ️ သတင်းပေးပို့နည်း":
 
         context.user_data["submitting_news"] = False
-        context.user_data["submitting_editor_letter"] = False
+        context.user_data[
+            "submitting_editor_letter"
+        ] = False
 
         await message.reply_text(
             "ℹ️ သတင်းပေးပို့နည်း\n\n"
@@ -404,6 +380,7 @@ async def handle_message(
         )
 
         return
+
 
     # ========================================================
     # EDITOR LETTER
@@ -443,6 +420,7 @@ async def handle_message(
 
         return
 
+
     # ========================================================
     # NEWS SUBMISSION
     # ========================================================
@@ -458,7 +436,6 @@ async def handle_message(
             )
             return
 
-        # Save to Supabase
         saved = await save_news(
             update,
             text,
@@ -472,7 +449,6 @@ async def handle_message(
             )
             return
 
-        # Send to editor group
         editor_sent = await send_to_editor(
             update,
             context,
@@ -498,6 +474,7 @@ async def handle_message(
         ] = False
 
         return
+
 
     # ========================================================
     # DEFAULT
@@ -542,27 +519,23 @@ telegram_app.add_handler(
 async def lifespan(
     app: FastAPI,
 ):
-    """
-    Start Telegram application and configure webhook.
-    """
 
     print("========================================")
     print("Starting Telegram application...")
     print("========================================")
 
     try:
-        # Initialize Telegram application
         await telegram_app.initialize()
 
-        # Start Telegram application
         await telegram_app.start()
 
-        # Set Telegram webhook
         await telegram_app.bot.set_webhook(
             url=WEBHOOK_URL
         )
 
-        print("Telegram webhook set successfully:")
+        print(
+            "Telegram webhook set successfully:"
+        )
         print(WEBHOOK_URL)
 
     except Exception as error:
@@ -571,12 +544,7 @@ async def lifespan(
 
         raise
 
-    # Keep FastAPI running
     yield
-
-    # ========================================================
-    # SHUTDOWN
-    # ========================================================
 
     print("========================================")
     print("Stopping Telegram application...")
@@ -623,9 +591,6 @@ app = FastAPI(
 
 @app.get("/")
 async def home():
-    """
-    Render health check endpoint.
-    """
 
     return {
         "status": "online",
@@ -641,21 +606,15 @@ async def home():
 async def telegram_webhook(
     request: Request,
 ):
-    """
-    Receive Telegram webhook updates.
-    """
 
     try:
-        # Read JSON from Telegram
         data = await request.json()
 
-        # Convert JSON to Telegram Update
         update = Update.de_json(
             data,
             telegram_app.bot,
         )
 
-        # Process update
         await telegram_app.process_update(
             update
         )
