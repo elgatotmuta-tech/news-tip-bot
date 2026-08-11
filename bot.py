@@ -1,4 +1,4 @@
-```python
+python
 import os
 from contextlib import asynccontextmanager
 
@@ -584,4 +584,3 @@ async def telegram_webhook(
         return {
             "ok": False
         }
-```
