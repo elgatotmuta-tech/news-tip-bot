@@ -1,5 +1,7 @@
 import os
-from flask import Flask, request
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -9,10 +11,16 @@ from telegram.ext import (
     filters,
 )
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.environ["BOT_TOKEN"]
 EDITOR_GROUP_ID = os.getenv("EDITOR_GROUP_ID")
 
-app = Flask(__name__)
+RENDER_URL = os.environ.get(
+    "RENDER_EXTERNAL_URL",
+    "http://localhost:10000"
+)
+
+WEBHOOK_PATH = "/telegram/webhook"
+WEBHOOK_URL = RENDER_URL + WEBHOOK_PATH
 
 telegram_app = Application.builder().token(TOKEN).build()
 
@@ -25,8 +33,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "မင်္ဂလာပါ။ သင့်သတင်းအချက်အလက်ကို "
-        "ကျွန်ုပ်တို့သတင်းဌာနသို့ ပေးပို့နိုင်ပါတယ်။",
+        "မင်္ဂလာပါ။\n\n"
+        "သင့်ထံမှ သတင်းအချက်အလက်၊ ဓာတ်ပုံနှင့် "
+        "ဗီဒီယိုများကို ကျွန်ုပ်တို့သတင်းဌာနသို့ ပေးပို့နိုင်ပါတယ်။\n\n"
+        "အောက်ပါခလုတ်ကို ရွေးချယ်ပါ။",
         reply_markup=ReplyKeyboardMarkup(
             keyboard,
             resize_keyboard=True
@@ -34,7 +44,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     if not update.message:
         return
 
@@ -44,9 +57,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["submitting_news"] = True
 
         await update.message.reply_text(
-            "သတင်းဖြစ်စဉ်ကို အသေးစိတ်ရေးပေးပါ။\n\n"
-            "ဘာဖြစ်ခဲ့သလဲ၊ ဘယ်နေရာမှာဖြစ်သလဲ၊ "
-            "ဘယ်အချိန်မှာဖြစ်သလဲ စသည်တို့ကို ရေးပေးပါ။"
+            "📰 သတင်းပေးပို့ရန်\n\n"
+            "ဖြစ်စဉ်ကို အသေးစိတ်ရေးပေးပါ။\n\n"
+            "ဥပမာ -\n"
+            "• ဘာဖြစ်ခဲ့သလဲ\n"
+            "• ဘယ်နေရာမှာဖြစ်သလဲ\n"
+            "• ဘယ်အချိန်မှာဖြစ်သလဲ\n"
+            "• သိရှိထားသမျှ အချက်အလက်များ"
         )
         return
 
@@ -54,15 +71,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["submitting_news"] = True
 
         await update.message.reply_text(
-            "🚨 အရေးပေါ်သတင်းအတွက် ဖြစ်စဉ်၊ နေရာ၊ "
-            "အချိန်နဲ့ သိရှိထားသမျှကို ပေးပို့ပါ။"
+            "🚨 အရေးပေါ်သတင်း\n\n"
+            "ဖြစ်စဉ်၊ နေရာ၊ အချိန်နဲ့ "
+            "သိရှိထားသမျှကို ပေးပို့ပါ။"
         )
         return
 
     if text == "ℹ️ သတင်းပေးပို့နည်း":
         await update.message.reply_text(
-            "သတင်းပေးပို့ရာတွင် ဖြစ်စဉ်၊ နေရာ၊ အချိန်နှင့် "
-            "ဓာတ်ပုံ/ဗီဒီယိုရှိပါက ပေးပို့နိုင်ပါတယ်။"
+            "ℹ️ သတင်းပေးပို့နည်း\n\n"
+            "သတင်းဖြစ်စဉ်၊ နေရာ၊ အချိန်၊ "
+            "ဓာတ်ပုံနှင့် ဗီဒီယိုများကို ပေးပို့နိုင်ပါတယ်။\n\n"
+            "သတင်းအချက်အလက် မမှန်ကန်ပါက "
+            "သတင်းမီဒီယာမှ စိစစ်ပြီးမှသာ အသုံးပြုပါမယ်။"
         )
         return
 
@@ -70,22 +91,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
 
         report = (
-            "🆕 NEW NEWS TIP\n\n"
-            f"👤 User: {user.first_name or 'Unknown'}\n"
+            "🆕 NEW NEWS TIP\n"
+            "━━━━━━━━━━━━━━\n\n"
+            f"👤 ပေးပို့သူ: {user.first_name or 'Unknown'}\n"
             f"🆔 Telegram ID: {user.id}\n\n"
-            f"📝 သတင်း:\n{text}"
+            f"📝 သတင်းအချက်အလက်:\n{text}\n\n"
+            "━━━━━━━━━━━━━━\n"
+            "Status: NEW"
         )
 
         if EDITOR_GROUP_ID:
-            await context.bot.send_message(
-                chat_id=int(EDITOR_GROUP_ID),
-                text=report,
-            )
+            try:
+                await context.bot.send_message(
+                    chat_id=int(EDITOR_GROUP_ID),
+                    text=report,
+                )
+            except Exception as e:
+                print("EDITOR GROUP ERROR:", e)
 
         await update.message.reply_text(
-            "✅ သတင်းကို လက်ခံရရှိပါပြီ။\n"
-            "အယ်ဒီတာအဖွဲ့က စိစစ်ပြီး လိုအပ်ပါက "
-            "ပြန်လည်ဆက်သွယ်ပါမယ်။"
+            "✅ သတင်းကို လက်ခံရရှိပါပြီ။\n\n"
+            "အယ်ဒီတာအဖွဲ့က စိစစ်ပြီး "
+            "လိုအပ်ပါက ပြန်လည်ဆက်သွယ်ပါမယ်။"
         )
 
         context.user_data["submitting_news"] = False
@@ -96,41 +123,59 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-telegram_app.add_handler(CommandHandler("start", start))
 telegram_app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
+    CommandHandler("start", start)
+)
+
+telegram_app.add_handler(
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handle_message
+    )
 )
 
 
-@app.route("/", methods=["GET"])
-def home():
-    return "News Tip Bot is running."
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    await telegram_app.initialize()
+    await telegram_app.start()
+
+    await telegram_app.bot.set_webhook(
+        url=WEBHOOK_URL
+    )
+
+    print("Telegram webhook set to:")
+    print(WEBHOOK_URL)
+
+    yield
+
+    await telegram_app.bot.delete_webhook()
+    await telegram_app.stop()
+    await telegram_app.shutdown()
 
 
-@app.route("/webhook", methods=["POST"])
-async def webhook():
-    data = request.get_json(force=True)
+app = FastAPI(lifespan=lifespan)
 
-    update = Update.de_json(data, telegram_app.bot)
+
+@app.get("/")
+async def home():
+    return {
+        "status": "online",
+        "service": "News Tip Bot"
+    }
+
+
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+
+    data = await request.json()
+
+    update = Update.de_json(
+        data,
+        telegram_app.bot
+    )
 
     await telegram_app.process_update(update)
 
-    return "OK"
-
-
-if __name__ == "__main__":
-    import asyncio
-    import threading
-
-    async def initialize():
-        await telegram_app.initialize()
-        await telegram_app.start()
-
-    asyncio.run(initialize())
-
-    port = int(os.environ.get("PORT", 10000))
-
-    app.run(
-        host="0.0.0.0",
-        port=port
-    )
+    return {"ok": True}
